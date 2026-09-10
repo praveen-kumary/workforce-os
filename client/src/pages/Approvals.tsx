@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CheckCircle, CalendarDays, Receipt, ShoppingCart,
-  DollarSign, XCircle,
+  Key, XCircle,
 } from 'lucide-react';
 import { approvalsApi } from '../lib/api';
 import { useToast } from '../components/ui/Toaster';
@@ -11,8 +11,8 @@ import type { UnifiedApprovalItem } from '../lib/types';
 const TYPE_CONFIG: Record<string, { icon: any; color: string; bg: string; label: string }> = {
   leave: { icon: CalendarDays, color: '#2563eb', bg: 'var(--info-bg)', label: 'Leave' },
   expense: { icon: Receipt, color: '#d97706', bg: 'var(--warning-bg)', label: 'Expense' },
-  purchase: { icon: ShoppingCart, color: '#7c3aed', bg: '#f5f3ff', label: 'Purchase Order' },
-  access: { icon: DollarSign, color: '#6366f1', bg: '#eef2ff', label: 'Access Request' },
+  purchase: { icon: ShoppingCart, color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.12)', label: 'Purchase Order' },
+  access: { icon: Key, color: '#6366f1', bg: 'rgba(99, 102, 241, 0.12)', label: 'Access Request' },
 };
 
 export function Approvals() {

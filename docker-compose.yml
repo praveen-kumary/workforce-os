@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: uos-postgres
+    environment:
+      POSTGRES_USER: uos_user
+      POSTGRES_PASSWORD: uos_password
+      POSTGRES_DB: uos_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uos_user -d uos_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - uos-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: uos-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - uos-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  uos-network:
+    driver: bridge

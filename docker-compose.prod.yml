@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: uos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-uos_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-uos_password}
+      POSTGRES_DB: ${POSTGRES_DB:-uos_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-uos_user} -d ${POSTGRES_DB:-uos_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - uos-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: uos-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - uos-network
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: uos-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-uos_user}:${POSTGRES_PASSWORD:-uos_password}@postgres:5432/${POSTGRES_DB:-uos_db}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-enterprise_super_secret_jwt_key_at_least_32_chars_long!}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+    ports:
+      - "4000:4000"
+    networks:
+      - uos-network
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: uos-client
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "80:80"
+    networks:
+      - uos-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  uos-network:
+    driver: bridge

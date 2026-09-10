@@ -1,0 +1,723 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ---------------------------------------------------------
+// Core Module â€” Employee Graph (Single Source of Truth)
+// ---------------------------------------------------------
+
+
+
+
+
+model Employee {
+  id               String         @id @default(uuid())
+  firstName        String
+  lastName         String
+  email            String         @unique
+  phone            String?
+  avatarUrl        String?
+  passwordHash     String?
+  status String  @default("ONBOARDING")
+  department       String
+  roleTitle        String
+  employmentType String  @default("FULL_TIME")
+  hireDate         DateTime
+  terminationDate  DateTime?
+  location         String         @default("San Francisco, CA")
+  pronouns         String?        @default("they/them")
+  bio              String?
+  customFields String?          @default("{}")
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  // Self-relation for Manager hierarchy
+  managerId        String?
+  manager          Employee?      @relation("ManagerToEmployee", fields: [managerId], references: [id])
+  subordinates     Employee[]     @relation("ManagerToEmployee")
+
+  // Relations across all unified modules
+  auditLogs             AuditLog[]
+  onboardingTasks       OnboardingTask[]
+  leaveRequests         LeaveRequest[]
+  leaveBalances         LeaveBalance[]
+  devices               Device[]
+  appAccesses           AppAccess[]
+  payrollProfile        PayrollProfile?
+  payslips              Payslip[]
+  expenses              Expense[]
+  corporateCard         CorporateCard?
+  eventLogs             EventLog[]
+  supportTickets        SupportTicket[]
+  notifications         Notification[]
+  documents             Document[]
+  performanceReviews    PerformanceReview[]
+  goals                 GoalOKR[]
+  benefitEnrollments    BenefitEnrollment[]
+  compensationHistories CompensationHistory[]
+  workflowExecutions    WorkflowExecution[]
+  attendanceRecords     AttendanceRecord[]
+
+  @@index([email])
+  @@index([department])
+  @@index([status])
+  @@index([managerId])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  changedBy   String
+  fieldName   String
+  oldValue    String?
+  newValue    String?
+  action      String
+  createdAt   DateTime @default(now())
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  title       String
+  message     String
+  type        String   @default("INFO") // INFO, SUCCESS, WARNING, ERROR
+  isRead      Boolean  @default(false)
+  link        String?
+  createdAt   DateTime @default(now())
+}
+
+model CompanySettings {
+  id                String   @id @default(uuid())
+  companyName       String
+  timezone          String   @default("UTC")
+  dateFormat        String   @default("YYYY-MM-DD")
+  currency          String   @default("USD")
+  slackIntegration  Boolean  @default(true)
+  googleWorkspace   Boolean  @default(true)
+  autoProvisionIT   Boolean  @default(true)
+  autoRunPayroll    Boolean  @default(false)
+  updatedAt         DateTime @updatedAt
+}
+
+// ---------------------------------------------------------
+// HR Cloud Modules
+// ---------------------------------------------------------
+
+model OnboardingTemplate {
+  id         String   @id @default(uuid())
+  name       String
+  department String
+  steps String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  
+  tasks      OnboardingTask[]
+}
+
+
+
+model OnboardingTask {
+  id          String             @id @default(uuid())
+  employeeId  String
+  employee    Employee           @relation(fields: [employeeId], references: [id])
+  templateId  String
+  template    OnboardingTemplate @relation(fields: [templateId], references: [id])
+  stepName    String
+  stepOrder   Int
+  status String          @default("PENDING")
+  assignedTo  String?
+  dueDate     DateTime?
+  completedAt DateTime?
+}
+
+
+
+
+
+model LeaveRequest {
+  id          String      @id @default(uuid())
+  employeeId  String
+  employee    Employee    @relation(fields: [employeeId], references: [id])
+  leaveType String
+  startDate   DateTime
+  endDate     DateTime
+  daysCount   Decimal
+  status String  @default("PENDING")
+  approvedBy  String?
+  notes       String?
+  createdAt   DateTime    @default(now())
+
+  @@index([employeeId, status])
+  @@index([status])
+}
+
+model LeaveBalance {
+  id          String    @id @default(uuid())
+  employeeId  String
+  employee    Employee  @relation(fields: [employeeId], references: [id])
+  leaveType String
+  totalDays   Decimal
+  usedDays    Decimal
+  pendingDays Decimal
+  year        Int
+}
+
+// Documents & E-Signatures
+
+
+model Document {
+  id          String         @id @default(uuid())
+  employeeId  String
+  employee    Employee       @relation(fields: [employeeId], references: [id])
+  title       String
+  category    String         // "OFFER_LETTER", "NDA", "W4_TAX", "I9_FORM", "HANDBOOK"
+  fileUrl     String?
+  status String  @default("PENDING_SIGNATURE")
+  signedAt    DateTime?
+  signedBy    String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+// Performance Reviews & OKRs
+
+
+model PerformanceReview {
+  id          String       @id @default(uuid())
+  employeeId  String
+  employee    Employee     @relation(fields: [employeeId], references: [id])
+  cycleName   String       // "Q3 2026 Review Cycle"
+  rating      Decimal?     // 1.0 to 5.0
+  feedback    String?
+  status String  @default("SELF_REVIEW")
+  reviewerId  String?
+  submittedAt DateTime?
+  createdAt   DateTime     @default(now())
+}
+
+model GoalOKR {
+  id          String   @id @default(uuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  title       String
+  description String?
+  progress    Int      @default(0) // 0 to 100%
+  targetDate  DateTime?
+  status      String   @default("ON_TRACK") // ON_TRACK, AT_RISK, BEHIND, COMPLETED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Benefits Administration
+
+
+model BenefitPlan {
+  id           String      @id @default(uuid())
+  name         String
+  type String
+  provider     String
+  description  String
+  monthlyCost  Decimal
+  employerContrib Decimal
+  enrollments  BenefitEnrollment[]
+}
+
+model BenefitEnrollment {
+  id          String      @id @default(uuid())
+  employeeId  String
+  employee    Employee    @relation(fields: [employeeId], references: [id])
+  planId      String
+  plan        BenefitPlan @relation(fields: [planId], references: [id])
+  coverageTier String     // "INDIVIDUAL", "FAMILY", "PLUS_ONE"
+  status      String      @default("ENROLLED") // ENROLLED, WAIVED, PENDING
+  enrolledAt  DateTime    @default(now())
+}
+
+// ---------------------------------------------------------
+// IT Cloud Modules
+// ---------------------------------------------------------
+
+
+
+model Device {
+  id             String       @id @default(uuid())
+  employeeId     String?
+  employee       Employee?    @relation(fields: [employeeId], references: [id])
+  deviceType     String       // "Laptop", "Desktop", "Monitor", "Mobile"
+  make           String
+  model          String
+  serialNumber   String       @unique
+  osName         String
+  osVersion      String
+  isEncrypted    Boolean      @default(true)
+  batteryHealth  Int          @default(98)
+  diskUsageGb    Int          @default(120)
+  status String  @default("ACTIVE")
+  assignedDate   DateTime?
+  returnDate     DateTime?
+  lastCheckIn    DateTime?    @default(now())
+}
+
+
+
+model AppAccess {
+  id            String          @id @default(uuid())
+  employeeId    String
+  employee      Employee        @relation(fields: [employeeId], references: [id])
+  appName       String
+  accessLevel   String
+  status String  @default("ACTIVE")
+  provisionedAt DateTime?
+  revokedAt     DateTime?
+}
+
+model AppCatalogItem {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  category    String   // "DEVELOPMENT", "COMMUNICATION", "PRODUCTIVITY", "FINANCE"
+  logoUrl     String?
+  ssoEnabled  Boolean  @default(true)
+  licenseCost Decimal  @default(15.0)
+  activeSeats Int      @default(0)
+  totalSeats  Int      @default(100)
+}
+
+
+
+
+
+model SupportTicket {
+  id          String         @id @default(uuid())
+  employeeId  String
+  employee    Employee       @relation(fields: [employeeId], references: [id])
+  title       String
+  description String
+  category    String         // "HARDWARE", "SOFTWARE", "ACCESS", "SECURITY"
+  status String    @default("OPEN")
+  priority String  @default("MEDIUM")
+  assignedTo  String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([employeeId, status])
+  @@index([status, priority])
+}
+
+model SecurityPolicy {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  category    String   // "ENCRYPTION", "PASSWORD_COMPLEXITY", "MFA", "OS_UPDATE"
+  enforced    Boolean  @default(true)
+  complianceRate Int   @default(96)
+  updatedAt   DateTime @updatedAt
+}
+
+// ---------------------------------------------------------
+// Finance Cloud Modules
+// ---------------------------------------------------------
+
+
+
+model PayrollProfile {
+  id            String       @id @default(uuid())
+  employeeId    String       @unique
+  employee      Employee     @relation(fields: [employeeId], references: [id])
+  baseSalary    Decimal
+  payFrequency String  @default("MONTHLY")
+  currency      String       @default("USD")
+  taxSlab       String       @default("Federal Standard")
+  taxRate       Decimal      @default(22.0)
+  bankName      String       @default("JPMorgan Chase")
+  accountNumber String
+  routingNumber String
+  isActive      Boolean      @default(true)
+}
+
+
+
+model PayrollRun {
+  id            String        @id @default(uuid())
+  period        String
+  payDate       DateTime
+  status String  @default("DRAFT")
+  totalGross    Decimal
+  totalNet      Decimal
+  totalTax      Decimal
+  employeeCount Int
+  createdAt     DateTime      @default(now())
+
+  payslips      Payslip[]
+}
+
+model Payslip {
+  id                  String     @id @default(uuid())
+  payrollRunId        String
+  payrollRun          PayrollRun @relation(fields: [payrollRunId], references: [id])
+  employeeId          String
+  employee            Employee   @relation(fields: [employeeId], references: [id])
+  grossPay            Decimal
+  basePay             Decimal
+  taxDeduction        Decimal
+  insuranceDeduction  Decimal    @default(0)
+  retirementDeduction Decimal    @default(0)
+  otherDeductions     Decimal    @default(0)
+  netPay              Decimal
+  pdfUrl              String?
+  createdAt           DateTime   @default(now())
+}
+
+
+
+model Expense {
+  id          String        @id @default(uuid())
+  employeeId  String
+  employee    Employee      @relation(fields: [employeeId], references: [id])
+  category    String        // "TRAVEL", "SOFTWARE", "OFFICE", "MEALS", "WELLNESS"
+  description String
+  amount      Decimal
+  currency    String        @default("USD")
+  receiptUrl  String?
+  status String  @default("DRAFT")
+  approvedBy  String?
+  submittedAt DateTime?
+  createdAt   DateTime      @default(now())
+}
+
+
+
+model CorporateCard {
+  id               String     @id @default(uuid())
+  employeeId       String     @unique
+  employee         Employee   @relation(fields: [employeeId], references: [id])
+  cardNumberMasked String
+  cardType         String     @default("virtual") // virtual | physical
+  spendingLimit    Decimal
+  currentBalance   Decimal    @default(0)
+  status String  @default("ACTIVE")
+  issuedDate       DateTime   @default(now())
+  expiryDate       DateTime
+}
+
+model CompensationBand {
+  id          String   @id @default(uuid())
+  roleTitle   String
+  department  String
+  level       String   // "L3", "L4", "L5", "L6"
+  minSalary   Decimal
+  midSalary   Decimal
+  maxSalary   Decimal
+  equityMin   Int      @default(1000)
+  equityMax   Int      @default(10000)
+}
+
+model CompensationHistory {
+  id            String   @id @default(uuid())
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id])
+  effectiveDate DateTime
+  baseSalary    Decimal
+  bonus         Decimal? @default(0)
+  equityShares  Int?     @default(0)
+  reason        String   // "ANNUAL_RAISE", "PROMOTION", "MARKET_ADJUSTMENT", "INITIAL_OFFER"
+  createdAt     DateTime @default(now())
+}
+
+// ---------------------------------------------------------
+// Workflow Studio Engine (Rippling-Killer Automator)
+// ---------------------------------------------------------
+
+model WorkflowRule {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  triggerType    String   // "employee.hired", "employee.terminated", "leave.approved", "expense.submitted", "role.changed"
+  conditions String // e.g. [{"field": "department", "operator": "equals", "value": "Engineering"}]
+  actions String // e.g. [{"type": "provision_app", "params": {"appName": "GitHub"}}, ...]
+  isActive       Boolean  @default(true)
+  createdBy      String   @default("System Admin")
+  executionCount Int      @default(0)
+  lastExecutedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  executions     WorkflowExecution[]
+}
+
+model WorkflowExecution {
+  id          String       @id @default(uuid())
+  ruleId      String
+  rule        WorkflowRule @relation(fields: [ruleId], references: [id])
+  employeeId  String
+  employee    Employee     @relation(fields: [employeeId], references: [id])
+  triggeredBy String
+  status      String       @default("COMPLETED") // RUNNING, COMPLETED, FAILED
+  actionsLog String
+  startedAt   DateTime     @default(now())
+  completedAt DateTime?
+}
+
+// ---------------------------------------------------------
+// Unified Event Log
+// ---------------------------------------------------------
+
+
+
+model EventLog {
+  id          String      @id @default(uuid())
+  eventType   String
+  employeeId  String
+  employee    Employee    @relation(fields: [employeeId], references: [id])
+  payload String
+  status String  @default("PENDING")
+  retryCount  Int         @default(0)
+  createdAt   DateTime    @default(now())
+  processedAt DateTime?
+}
+
+// ---------------------------------------------------------
+// CRM & Sales Module
+// ---------------------------------------------------------
+
+model Customer {
+  id          String   @id @default(uuid())
+  name        String
+  website     String?
+  industry    String?
+  status      String   @default("ACTIVE") // ACTIVE, LEAD, CHURNED
+  ownerId     String?  // Employee ID
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  contacts    Contact[]
+  deals       Deal[]
+  projects    Project[]
+  invoices    Invoice[]
+}
+
+model Contact {
+  id          String   @id @default(uuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  firstName   String
+  lastName    String
+  email       String
+  phone       String?
+  roleTitle   String?
+  isPrimary   Boolean  @default(false)
+}
+
+model Deal {
+  id          String   @id @default(uuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  name        String
+  amount      Decimal
+  stage       String   @default("NEW") // NEW, QUALIFIED, PROPOSAL, NEGOTIATION, WON, LOST
+  probability Int      @default(10)
+  closeDate   DateTime?
+  ownerId     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ---------------------------------------------------------
+// Project Management Module
+// ---------------------------------------------------------
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  managerId   String?
+  status      String   @default("PLANNING") // PLANNING, ACTIVE, ON_HOLD, COMPLETED
+  budget      Decimal?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tasks       Task[]
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  title       String
+  description String?
+  status      String   @default("TODO") // TODO, IN_PROGRESS, REVIEW, DONE
+  assigneeId  String?
+  dueDate     DateTime?
+  createdAt   DateTime @default(now())
+}
+
+// ---------------------------------------------------------
+// Finance: Invoicing & Procurement
+// ---------------------------------------------------------
+
+model Invoice {
+  id          String   @id @default(uuid())
+  invoiceNum  String   @unique
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  amount      Decimal
+  status      String   @default("DRAFT") // DRAFT, SENT, PARTIAL, PAID, OVERDUE
+  issueDate   DateTime @default(now())
+  dueDate     DateTime
+  createdAt   DateTime @default(now())
+
+  items       InvoiceItem[]
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Decimal
+  total       Decimal
+}
+
+model Vendor {
+  id          String   @id @default(uuid())
+  name        String
+  category    String
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+
+  purchaseOrders PurchaseOrder[]
+}
+
+model PurchaseOrder {
+  id          String   @id @default(uuid())
+  poNumber    String   @unique
+  vendorId    String
+  vendor      Vendor   @relation(fields: [vendorId], references: [id])
+  requesterId String   // Employee ID
+  amount      Decimal
+  status      String   @default("PENDING_APPROVAL") // PENDING, APPROVED, SENT, RECEIVED, PAID
+  createdAt   DateTime @default(now())
+}
+
+// ---------------------------------------------------------
+// Workplace & Collaboration Modules
+// ---------------------------------------------------------
+
+model AttendanceRecord {
+  id          String    @id @default(uuid())
+  employeeId  String
+  employee    Employee  @relation(fields: [employeeId], references: [id])
+  date        DateTime  @default(now())
+  clockIn     DateTime  @default(now())
+  clockOut    DateTime?
+  hoursWorked Decimal?  @default(0)
+  status      String    @default("PRESENT") // PRESENT, LATE, REMOTE, ON_LEAVE, HALF_DAY
+  notes       String?
+  createdAt   DateTime  @default(now())
+}
+
+model JobOpening {
+  id             String      @id @default(uuid())
+  title          String
+  department     String
+  location       String
+  employmentType String      @default("Full-time")
+  salaryRange    String
+  description    String?
+  status         String      @default("OPEN") // OPEN, CLOSED, DRAFT
+  postedDate     DateTime    @default(now())
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  candidates     Candidate[]
+}
+
+model Candidate {
+  id          String     @id @default(uuid())
+  jobId       String
+  job         JobOpening @relation(fields: [jobId], references: [id])
+  name        String
+  email       String
+  phone       String?
+  stage       String     @default("APPLIED") // APPLIED, SCREENING, INTERVIEW, ASSESSMENT, OFFER, HIRED, REJECTED
+  rating      Decimal?   @default(4.0)
+  source      String     @default("LinkedIn")
+  resumeUrl   String?
+  appliedDate DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+}
+
+model KnowledgeArticle {
+  id          String   @id @default(uuid())
+  title       String
+  category    String   // Onboarding, Engineering, Finance, HR, IT, Marketing, Sales
+  content     String
+  authorId    String?
+  authorName  String   @default("System Team")
+  views       Int      @default(0)
+  isPinned    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model LearningCourse {
+  id             String   @id @default(uuid())
+  title          String
+  category       String   // Compliance, Leadership, Security, Soft Skills, Professional
+  duration       String
+  description    String?
+  isMandatory    Boolean  @default(false)
+  enrolledCount  Int      @default(0)
+  completedCount Int      @default(0)
+  rating         Decimal  @default(4.5)
+  status         String   @default("PUBLISHED")
+  createdAt      DateTime @default(now())
+}
+
+model ChatChannel {
+  id          String        @id @default(uuid())
+  name        String        @unique
+  type        String        @default("public") // public, private
+  topic       String?
+  isPinned    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+
+  messages    ChatMessage[]
+}
+
+model ChatMessage {
+  id           String      @id @default(uuid())
+  channelId    String
+  channel      ChatChannel @relation(fields: [channelId], references: [id])
+  senderName   String
+  senderAvatar String?
+  content      String
+  reactions    String?     @default("[]")
+  createdAt    DateTime    @default(now())
+}
+
+model CalendarEvent {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  type        String   @default("meeting") // meeting, interview, review, all_hands, deadline
+  date        String   // YYYY-MM-DD
+  time        String   // e.g. 10:00 AM - 11:00 AM
+  location    String?  @default("Virtual / Zoom")
+  attendees   String?  @default("[]") // JSON string of attendee names
+  color       String?  @default("var(--accent)")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+

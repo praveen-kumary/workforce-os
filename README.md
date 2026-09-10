@@ -328,7 +328,7 @@ cd client
 npm run dev
 ```
 
-Open your browser and navigate to **[http://localhost:5173](http://localhost:5173)**.
+Open your browser and navigate to the client dev server (`http://localhost:5173`).
 
 ### Default Test Credentials
 
@@ -353,9 +353,9 @@ docker-compose up --build -d
 docker-compose logs -f
 ```
 
-The services will be exposed at:
-- Frontend: `http://localhost:5173` (or `80` in production)
-- Backend API: `http://localhost:4000`
+The container services are exposed at:
+- Frontend Web App: `http://localhost:5173` (or port `80` with Nginx reverse proxy)
+- Backend REST API: `http://localhost:4000`
 
 ---
 
